@@ -15,9 +15,10 @@ Clarinet.test({
         let block = chain.mineBlock([
             Tx.contractCall('vacation-booking', 'create-package', [
                 types.ascii("Beach Resort"),
-                types.ascii("Hawaii"),
+                types.ascii("Hawaii"), 
                 types.uint(10),
-                types.uint(1000000)
+                types.uint(1000000),
+                types.uint(20) // 20% cancellation fee
             ], deployer.address)
         ]);
         
@@ -36,7 +37,8 @@ Clarinet.test({
                 types.ascii("Beach Resort"),
                 types.ascii("Hawaii"),
                 types.uint(10),
-                types.uint(1000000)
+                types.uint(1000000),
+                types.uint(20)
             ], deployer.address),
             
             Tx.contractCall('vacation-booking', 'book-shares', [
@@ -56,5 +58,46 @@ Clarinet.test({
         );
         
         getShares.result.expectUint(8);
+    }
+});
+
+Clarinet.test({
+    name: "Can cancel booking and receive refund",
+    async fn(chain: Chain, accounts: Map<string, Account>) {
+        const deployer = accounts.get('deployer')!;
+        const wallet1 = accounts.get('wallet_1')!;
+        
+        let block = chain.mineBlock([
+            Tx.contractCall('vacation-booking', 'create-package', [
+                types.ascii("Beach Resort"),
+                types.ascii("Hawaii"),
+                types.uint(10),
+                types.uint(1000000),
+                types.uint(20)
+            ], deployer.address),
+            
+            Tx.contractCall('vacation-booking', 'book-shares', [
+                types.uint(1),
+                types.uint(2)
+            ], wallet1.address),
+            
+            Tx.contractCall('vacation-booking', 'cancel-booking', [
+                types.uint(1)
+            ], wallet1.address)
+        ]);
+        
+        block.receipts[0].result.expectOk();
+        block.receipts[1].result.expectOk();
+        block.receipts[2].result.expectOk();
+        
+        // Verify shares returned
+        let getShares = chain.callReadOnlyFn(
+            'vacation-booking',
+            'get-available-shares',
+            [types.uint(1)],
+            wallet1.address
+        );
+        
+        getShares.result.expectUint(10);
     }
 });
